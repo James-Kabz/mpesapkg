@@ -1,0 +1,31 @@
+{
+    "name": "james-kabz/mpesapkg",
+    "version": "0.1.0",
+    "description": "Laravel package for integrating Safaricom M-Pesa APIs",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "James Kabz",
+            "email": "kabogp@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "JamesKabz\\MpesaPkg\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "JamesKabz\\MpesaPkg\\Providers\\MpesaServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
