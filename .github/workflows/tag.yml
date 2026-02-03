@@ -13,7 +13,7 @@ on:
 
 jobs:
   tag:
-    if: (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name != 'pull_request'
+    if: (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || (github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Merge pull request')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -41,8 +41,39 @@ jobs:
 
           IFS='.' read -r major minor patch <<< "$version"
 
-          # Increment patch version
-          patch=$((patch + 1))
+          bump="patch"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            labels='${{ toJson(github.event.pull_request.labels) }}'
+            if echo "$labels" | rg -q '"name":"major"'; then
+              bump="major"
+            elif echo "$labels" | rg -q '"name":"minor"'; then
+              bump="minor"
+            elif echo "$labels" | rg -q '"name":"patch"'; then
+              bump="patch"
+            fi
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            msg="${{ github.event.head_commit.message }}"
+            if echo "$msg" | rg -q "BREAKING CHANGE|!:|^feat!"; then
+              bump="major"
+            elif echo "$msg" | rg -q "^feat(\\(.+\\))?:"; then
+              bump="minor"
+            elif echo "$msg" | rg -q "^fix(\\(.+\\))?:"; then
+              bump="patch"
+            fi
+          fi
+
+          if [ "$bump" = "major" ]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+          elif [ "$bump" = "minor" ]; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
           new_tag="v${major}.${minor}.${patch}"
 
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
