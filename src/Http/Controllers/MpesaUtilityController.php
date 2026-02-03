@@ -118,13 +118,17 @@ class MpesaUtilityController
     {
         $data = $request->validate([
             'short_code' => ['required', 'string'],
-            'identifier_type' => ['required', 'string'],
+            'identifier_type' => ['nullable', 'string'],
             'remarks' => ['required', 'string', 'max:200'],
             'result_url' => ['nullable', 'url'],
             'timeout_url' => ['nullable', 'url'],
             'initiator_name' => ['nullable', 'string', 'max:50'],
             'security_credential' => ['nullable', 'string'],
         ]);
+
+        if (empty($data['identifier_type'])) {
+            $data['identifier_type'] = '4';
+        }
 
         $result = $client->accountBalance($data);
 

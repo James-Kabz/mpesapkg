@@ -381,3 +381,4 @@ curl -X POST "$BASE/$PREFIX/reversal/timeout" \
 
 - Requests and callbacks are persisted when `MPESA_STORE_REQUESTS=true` and `MPESA_STORE_CALLBACKS=true`.
 - Callbacks can be protected using `MPESA_WEBHOOK_VALIDATION` with token/IP allow-listing.
+- Account balance is for the merchant organization’s short code or BuyGoods till, not an end-customer balance check.
