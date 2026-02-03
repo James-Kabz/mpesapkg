@@ -5,9 +5,12 @@ use JamesKabz\MpesaPkg\Http\Controllers\MpesaC2bController;
 use JamesKabz\MpesaPkg\Http\Controllers\MpesaB2cController;
 use JamesKabz\MpesaPkg\Http\Controllers\MpesaStkController;
 use JamesKabz\MpesaPkg\Http\Controllers\MpesaUtilityController;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
-Route::prefix(config('mpesa.route_prefix', 'mpesa'))
-    ->middleware(config('mpesa.route_middleware', ['api']))
+$config = app(MpesaConfig::class);
+
+Route::prefix($config->routePrefix())
+    ->middleware($config->routeMiddleware())
     ->group(function () {
         Route::post('stk/push', [MpesaStkController::class, 'push']);
         Route::post('stk/callback', [MpesaStkController::class, 'callback']);

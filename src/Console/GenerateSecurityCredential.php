@@ -10,7 +10,7 @@ class GenerateSecurityCredential extends Command
     protected $signature = 'mpesa:security-credential {password? : Initiator password}';
     protected $description = 'Generate M-Pesa SecurityCredential using the configured certificate';
 
-    public function handle(): int
+    public function handle(MpesaHelper $helper): int
     {
         $password = $this->argument('password');
 
@@ -24,7 +24,7 @@ class GenerateSecurityCredential extends Command
         }
 
         try {
-            $credential = MpesaHelper::generateSecurityCredential($password);
+            $credential = $helper->generateSecurityCredential($password);
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
             return self::FAILURE;

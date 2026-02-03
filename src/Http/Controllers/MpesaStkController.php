@@ -9,10 +9,18 @@ use JamesKabz\MpesaPkg\MpesaClient;
 use JamesKabz\MpesaPkg\Http\Concerns\ValidatesWebhook;
 use JamesKabz\MpesaPkg\Models\MpesaCallback;
 use JamesKabz\MpesaPkg\Models\MpesaRequest;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
 class MpesaStkController
 {
     use ValidatesWebhook;
+
+    protected MpesaConfig $config;
+
+    public function __construct(MpesaConfig $config)
+    {
+        $this->config = $config;
+    }
 
     /**
      * Initiate STK push and persist request if enabled.
@@ -39,16 +47,15 @@ class MpesaStkController
             'party_b' => $data['party_b'] ?? null,
         ]);
 
-        if (config('mpesa.store_requests', true)) {
+        if ($this->config->storeRequests()) {
             try {
-                $stkConfig = config('mpesa.credentials.stk', []);
                 MpesaRequest::create([
                     'type' => 'stk',
                     'status' => $result['ok'] ? 'pending' : 'failed',
                     'phone' => $data['phone'],
                     'amount' => $data['amount'],
                     'party_a' => $data['phone'],
-                    'party_b' => $data['party_b'] ?? ($stkConfig['short_code'] ?? null),
+                    'party_b' => $data['party_b'] ?? $this->config->stkShortCode(),
                     'command_id' => $data['transaction_type'] ?? null,
                     'bill_ref_number' => $data['account_reference'] ?? null,
                     'merchant_request_id' => data_get($result, 'data.MerchantRequestID'),
@@ -102,7 +109,7 @@ class MpesaStkController
         $metadataItems = collect($metadata);
         $receipt = $metadataItems->firstWhere('Name', 'MpesaReceiptNumber');
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'stk',

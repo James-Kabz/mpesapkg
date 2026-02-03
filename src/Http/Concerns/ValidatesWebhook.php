@@ -4,6 +4,7 @@ namespace JamesKabz\MpesaPkg\Http\Concerns;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
 trait ValidatesWebhook
 {
@@ -13,13 +14,15 @@ trait ValidatesWebhook
      */
     protected function validateWebhook(Request $request): ?JsonResponse
     {
-        if (! config('mpesa.webhook_validation.enabled', false)) {
+        $config = app(MpesaConfig::class);
+
+        if (! $config->webhookValidationEnabled()) {
             return null;
         }
 
-        $header = config('mpesa.webhook_validation.header', 'X-Mpesa-Token');
-        $token = config('mpesa.webhook_validation.token');
-        $allowedIps = config('mpesa.webhook_validation.allowed_ips', []);
+        $header = $config->webhookValidationHeader();
+        $token = $config->webhookValidationToken();
+        $allowedIps = $config->webhookValidationAllowedIps();
 
         if ($token && $request->header($header) !== $token) {
             return response()->json([

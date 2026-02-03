@@ -8,10 +8,18 @@ use Illuminate\Support\Facades\Log;
 use JamesKabz\MpesaPkg\Http\Concerns\ValidatesWebhook;
 use JamesKabz\MpesaPkg\MpesaClient;
 use JamesKabz\MpesaPkg\Models\MpesaCallback;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
 class MpesaC2bController
 {
     use ValidatesWebhook;
+
+    protected MpesaConfig $config;
+
+    public function __construct(MpesaConfig $config)
+    {
+        $this->config = $config;
+    }
 
     /**
      * Register C2B validation and confirmation URLs.
@@ -60,7 +68,7 @@ class MpesaC2bController
         Log::info('M-Pesa C2B validation received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'c2b_validation',
@@ -98,7 +106,7 @@ class MpesaC2bController
         Log::info('M-Pesa C2B confirmation received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'c2b_confirmation',

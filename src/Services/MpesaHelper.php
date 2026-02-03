@@ -3,6 +3,13 @@ namespace JamesKabz\MpesaPkg\Services;
 
 class MpesaHelper
 {
+    protected MpesaConfig $config;
+
+    public function __construct(MpesaConfig $config)
+    {
+        $this->config = $config;
+    }
+
     /**
      * Generate SecurityCredential from raw initiator password
      *
@@ -10,18 +17,15 @@ class MpesaHelper
      * @return string Base64 encoded encrypted password
      * @throws \Exception
      */
-    public static function generateSecurityCredential(? string $initiatorPassword=null)
+    public function generateSecurityCredential(? string $initiatorPassword = null): string
     {
-        $initiatorPassword = $initiatorPassword ?? config('mpesa.credentials.b2c.security_credential');
+        $initiatorPassword = $initiatorPassword ?? $this->config->b2cSecurityCredential();
         if (empty($initiatorPassword)) {
             throw new \Exception("Initiator password is not set in config or parameter.");
         }
 
         // Determine certificate path based on environment
-        $env = config('mpesa.env', 'sandbox'); // default to sandbox
-        $certificatePath = $env === 'sandbox'
-            ? config('mpesa.cert_paths.sandbox', storage_path('app/private/certs/SandboxCertificate.cer'))
-            : config('mpesa.cert_paths.production', storage_path('app/private/certs/ProductionCertificate.cer'));
+        $certificatePath = $this->config->certificatePath();
 
         if (!file_exists($certificatePath)) {
             throw new \Exception("Certificate file not found at {$certificatePath}");

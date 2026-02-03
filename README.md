@@ -118,6 +118,36 @@ All API responses return:
 php artisan mpesa:security-credential
 ```
 
+## Using the Config Service
+
+The package exposes a typed config service so you don't need to call `config('mpesa...')` repeatedly.
+
+```php
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
+
+class Example
+{
+    public function __construct(private MpesaConfig $config) {}
+
+    public function handle(): void
+    {
+        $prefix = $this->config->routePrefix();
+        $stkShortCode = $this->config->stkShortCode();
+    }
+}
+```
+
+`MpesaClient` and `MpesaHelper` are resolved from the container, so you can type-hint them and let Laravel inject:
+
+```php
+use JamesKabz\MpesaPkg\MpesaClient;
+
+class PaymentsController
+{
+    public function __construct(private MpesaClient $mpesa) {}
+}
+```
+
 ## Test Commands (examples)
 
 Set:

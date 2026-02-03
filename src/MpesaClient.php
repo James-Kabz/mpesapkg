@@ -4,21 +4,18 @@ namespace JamesKabz\MpesaPkg;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 use JamesKabz\MpesaPkg\Services\MpesaHelper;
 
 class MpesaClient
 {
-    /**
-     * @var array<string, mixed>
-     */
-    protected array $config;
+    protected MpesaConfig $config;
+    protected MpesaHelper $helper;
 
-    /**
-     * @param array<string, mixed> $config
-     */
-    public function __construct(array $config)
+    public function __construct(MpesaConfig $config, ?MpesaHelper $helper = null)
     {
         $this->config = $config;
+        $this->helper = $helper ?: app(MpesaHelper::class);
     }
 
     /**
@@ -28,14 +25,14 @@ class MpesaClient
      */
     public function getAccessToken(): array
     {
-        $consumerKey = $this->config['consumer_key'] ?? null;
-        $consumerSecret = $this->config['consumer_secret'] ?? null;
+        $consumerKey = $this->config->consumerKey();
+        $consumerSecret = $this->config->consumerSecret();
 
         if (! $consumerKey || ! $consumerSecret) {
             return $this->errorResponse('Missing MPESA_CONSUMER_KEY or MPESA_CONSUMER_SECRET.');
         }
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/oauth/v1/generate';
 
         $response = Http::timeout(15)
@@ -63,9 +60,8 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $stkConfig = $this->config['credentials']['stk'] ?? [];
-        $shortCode = $stkConfig['short_code'] ?? null;
-        $passkey = $stkConfig['passkey'] ?? null;
+        $shortCode = $this->config->stkShortCode();
+        $passkey = $this->config->stkPasskey();
 
         if (! $shortCode || ! $passkey) {
             return $this->errorResponse('Missing MPESA_STK_SHORT_CODE or MPESA_STK_PASSKEY.');
@@ -75,24 +71,24 @@ class MpesaClient
         $password = base64_encode($shortCode . $passkey . $timestamp);
         $phone = $this->normalizePhone((string) ($payload['phone'] ?? ''));
         $callbackUrl = $payload['callback_url']
-            ?? $stkConfig['callback_url']
-            ?? $this->resolveCallback('stk');
+            ?? $this->config->stkCallbackUrl()
+            ?? $this->config->callbackStk();
 
         $data = [
             'BusinessShortCode' => $shortCode,
             'Password' => $password,
             'Timestamp' => $timestamp,
-            'TransactionType' => $payload['transaction_type'] ?? ($stkConfig['transaction_type'] ?? 'CustomerPayBillOnline'),
+            'TransactionType' => $payload['transaction_type'] ?? ($this->config->stkTransactionType() ?? 'CustomerPayBillOnline'),
             'Amount' => $payload['amount'] ?? 1,
             'PartyA' => $phone,
             'PartyB' => $payload['party_b'] ?? $shortCode,
             'PhoneNumber' => $phone,
             'CallBackURL' => $callbackUrl ?? '',
-            'AccountReference' => $payload['account_reference'] ?? ($stkConfig['account_reference'] ?? 'Mpesa Test'),
-            'TransactionDesc' => $payload['transaction_desc'] ?? ($stkConfig['transaction_desc'] ?? 'STK Push Test'),
+            'AccountReference' => $payload['account_reference'] ?? ($this->config->stkAccountReference() ?? 'Mpesa Test'),
+            'TransactionDesc' => $payload['transaction_desc'] ?? ($this->config->stkTransactionDesc() ?? 'STK Push Test'),
         ];
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/stkpush/v1/processrequest';
 
         $response = Http::timeout(20)
@@ -118,11 +114,10 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $b2cConfig = $this->config['credentials']['b2c'] ?? [];
-        $shortCode = $b2cConfig['short_code'] ?? null;
-        $initiator = $b2cConfig['initiator_name'] ?? null;
-        $initiatorPassword = $b2cConfig['initiator_password'] ?? null;
-        $securityCredential = $b2cConfig['security_credential'] ?? null;
+        $shortCode = $this->config->b2cShortCode();
+        $initiator = $this->config->b2cInitiatorName();
+        $initiatorPassword = $this->config->b2cInitiatorPassword();
+        $securityCredential = $this->config->b2cSecurityCredential();
 
         if (! $shortCode || ! $initiator || (! $initiatorPassword && ! $securityCredential)) {
             return $this->errorResponse('Missing MPESA_B2C_SHORT_CODE, MPESA_B2C_INITIATOR, and either MPESA_B2C_INITIATOR_PASSWORD or MPESA_B2C_SECURITY_CREDENTIAL.');
@@ -130,20 +125,20 @@ class MpesaClient
 
         if ($initiatorPassword) {
             try {
-                $securityCredential = MpesaHelper::generateSecurityCredential($initiatorPassword);
+                $securityCredential = $this->helper->generateSecurityCredential($initiatorPassword);
             } catch (\Throwable $e) {
                 return $this->errorResponse($e->getMessage());
             }
         }
 
         $phone = $this->normalizePhone((string) ($payload['phone'] ?? ''));
-        $resultUrl = $b2cConfig['result_url'] ?? $this->resolveCallback('b2c_result');
-        $timeoutUrl = $b2cConfig['timeout_url'] ?? $this->resolveCallback('b2c_timeout');
+        $resultUrl = $this->config->b2cResultUrl() ?? $this->config->callbackB2cResult();
+        $timeoutUrl = $this->config->b2cTimeoutUrl() ?? $this->config->callbackB2cTimeout();
 
         $data = [
             'InitiatorName' => $initiator,
             'SecurityCredential' => $securityCredential,
-            'CommandID' => $b2cConfig['command_id'] ?? 'BusinessPayment',
+            'CommandID' => $this->config->b2cCommandId() ?? 'BusinessPayment',
             'Amount' => $payload['amount'] ?? 1,
             'PartyA' => $shortCode,
             'PartyB' => $phone,
@@ -154,7 +149,7 @@ class MpesaClient
             'OriginatorConversationID' => $payload['originator_conversation_id'] ?? (string) Str::uuid(),
         ];
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/b2c/v3/paymentrequest';
 
         $response = Http::timeout(20)
@@ -180,11 +175,10 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $b2cConfig = $this->config['credentials']['b2c'] ?? [];
-        $shortCode = $b2cConfig['short_code'] ?? null;
-        $initiator = $b2cConfig['initiator_name'] ?? null;
-        $initiatorPassword = $b2cConfig['initiator_password'] ?? null;
-        $securityCredential = $b2cConfig['security_credential'] ?? null;
+        $shortCode = $this->config->b2cShortCode();
+        $initiator = $this->config->b2cInitiatorName();
+        $initiatorPassword = $this->config->b2cInitiatorPassword();
+        $securityCredential = $this->config->b2cSecurityCredential();
 
         if (! $shortCode || ! $initiator || (! $initiatorPassword && ! $securityCredential)) {
             return $this->errorResponse('Missing MPESA_B2C_SHORT_CODE, MPESA_B2C_INITIATOR, and either MPESA_B2C_INITIATOR_PASSWORD or MPESA_B2C_SECURITY_CREDENTIAL.');
@@ -196,20 +190,20 @@ class MpesaClient
 
         if ($initiatorPassword) {
             try {
-                $securityCredential = MpesaHelper::generateSecurityCredential($initiatorPassword);
+                $securityCredential = $this->helper->generateSecurityCredential($initiatorPassword);
             } catch (\Throwable $e) {
                 return $this->errorResponse($e->getMessage());
             }
         }
 
         $phone = $this->normalizePhone((string) ($payload['phone'] ?? ''));
-        $resultUrl = $b2cConfig['result_url'] ?? $this->resolveCallback('b2c_result');
-        $timeoutUrl = $b2cConfig['timeout_url'] ?? $this->resolveCallback('b2c_timeout');
+        $resultUrl = $this->config->b2cResultUrl() ?? $this->config->callbackB2cResult();
+        $timeoutUrl = $this->config->b2cTimeoutUrl() ?? $this->config->callbackB2cTimeout();
 
         $data = [
             'InitiatorName' => $initiator,
             'SecurityCredential' => $securityCredential,
-            'CommandID' => $payload['command_id'] ?? ($b2cConfig['command_id'] ?? 'BusinessPayment'),
+            'CommandID' => $payload['command_id'] ?? ($this->config->b2cCommandId() ?? 'BusinessPayment'),
             'Amount' => $payload['amount'] ?? 1,
             'PartyA' => $shortCode,
             'PartyB' => $phone,
@@ -222,7 +216,7 @@ class MpesaClient
             'QueueTimeOutURL' => $timeoutUrl ?? '',
         ];
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/b2cvalidate/v2/paymentrequest';
 
         $response = Http::timeout(20)
@@ -248,11 +242,10 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $c2bConfig = $this->config['credentials']['c2b'] ?? [];
-        $shortCode = $payload['short_code'] ?? $c2bConfig['short_code'] ?? null;
-        $confirmationUrl = $payload['confirmation_url'] ?? $c2bConfig['confirmation_url'] ?? $this->resolveCallback('c2b_confirmation');
-        $validationUrl = $payload['validation_url'] ?? $c2bConfig['validation_url'] ?? $this->resolveCallback('c2b_validation');
-        $responseType = $payload['response_type'] ?? ($c2bConfig['response_type'] ?? 'Completed');
+        $shortCode = $payload['short_code'] ?? $this->config->c2bShortCode();
+        $confirmationUrl = $payload['confirmation_url'] ?? $this->config->c2bConfirmationUrl() ?? $this->config->callbackC2bConfirmation();
+        $validationUrl = $payload['validation_url'] ?? $this->config->c2bValidationUrl() ?? $this->config->callbackC2bValidation();
+        $responseType = $payload['response_type'] ?? ($this->config->c2bResponseType() ?? 'Completed');
 
         if (! $shortCode || ! $confirmationUrl || ! $validationUrl) {
             return $this->errorResponse('Missing C2B short code, confirmation_url, or validation_url.');
@@ -265,7 +258,7 @@ class MpesaClient
             'ValidationURL' => $validationUrl,
         ];
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/c2b/v2/registerurl';
 
         $response = Http::timeout(20)
@@ -291,8 +284,7 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $c2bConfig = $this->config['credentials']['c2b'] ?? [];
-        $shortCode = $payload['short_code'] ?? $c2bConfig['short_code'] ?? null;
+        $shortCode = $payload['short_code'] ?? $this->config->c2bShortCode();
         $commandId = $payload['command_id'] ?? 'CustomerPayBillOnline';
         $phone = $this->normalizePhone((string) ($payload['phone'] ?? ''));
 
@@ -311,7 +303,7 @@ class MpesaClient
             $data['BillRefNumber'] = $payload['bill_ref_number'];
         }
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/c2b/v1/simulate';
 
         $response = Http::timeout(20)
@@ -337,9 +329,8 @@ class MpesaClient
             return $this->errorResponse('Failed to get access token.', $tokenResult['status'] ?? 400);
         }
 
-        $stkConfig = $this->config['credentials']['stk'] ?? [];
-        $shortCode = $stkConfig['short_code'] ?? null;
-        $passkey = $stkConfig['passkey'] ?? null;
+        $shortCode = $this->config->stkShortCode();
+        $passkey = $this->config->stkPasskey();
 
         if (! $shortCode || ! $passkey) {
             return $this->errorResponse('Missing MPESA_STK_SHORT_CODE or MPESA_STK_PASSKEY.');
@@ -359,7 +350,7 @@ class MpesaClient
             'CheckoutRequestID' => $payload['checkout_request_id'],
         ];
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/stkpushquery/v1/query';
 
         $response = Http::timeout(20)
@@ -389,16 +380,16 @@ class MpesaClient
             return $this->errorResponse('Missing short_code, transaction_id, identifier_type, or remarks.');
         }
 
-        $resultUrl = $payload['result_url'] ?? $this->resolveCallback('transaction_status_result');
-        $timeoutUrl = $payload['timeout_url'] ?? $this->resolveCallback('transaction_status_timeout');
+        $resultUrl = $payload['result_url'] ?? $this->config->callbackTransactionStatusResult();
+        $timeoutUrl = $payload['timeout_url'] ?? $this->config->callbackTransactionStatusTimeout();
 
-        $initiatorName = $payload['initiator_name'] ?? ($this->config['credentials']['b2c']['initiator_name'] ?? null);
-        $securityCredential = $payload['security_credential'] ?? ($this->config['credentials']['b2c']['security_credential'] ?? null);
-        $initiatorPassword = $this->config['credentials']['b2c']['initiator_password'] ?? null;
+        $initiatorName = $payload['initiator_name'] ?? $this->config->b2cInitiatorName();
+        $securityCredential = $payload['security_credential'] ?? $this->config->b2cSecurityCredential();
+        $initiatorPassword = $this->config->b2cInitiatorPassword();
 
         if (! $securityCredential && $initiatorPassword) {
             try {
-                $securityCredential = MpesaHelper::generateSecurityCredential($initiatorPassword);
+                $securityCredential = $this->helper->generateSecurityCredential($initiatorPassword);
             } catch (\Throwable $e) {
                 return $this->errorResponse($e->getMessage());
             }
@@ -421,7 +412,7 @@ class MpesaClient
             return $this->errorResponse('Missing initiator_name or security_credential for transaction status query.');
         }
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/transactionstatus/v1/query';
 
         $response = Http::timeout(20)
@@ -451,16 +442,16 @@ class MpesaClient
             return $this->errorResponse('Missing short_code, identifier_type, or remarks.');
         }
 
-        $resultUrl = $payload['result_url'] ?? $this->resolveCallback('account_balance_result');
-        $timeoutUrl = $payload['timeout_url'] ?? $this->resolveCallback('account_balance_timeout');
+        $resultUrl = $payload['result_url'] ?? $this->config->callbackAccountBalanceResult();
+        $timeoutUrl = $payload['timeout_url'] ?? $this->config->callbackAccountBalanceTimeout();
 
-        $initiatorName = $payload['initiator_name'] ?? ($this->config['credentials']['b2c']['initiator_name'] ?? null);
-        $securityCredential = $payload['security_credential'] ?? ($this->config['credentials']['b2c']['security_credential'] ?? null);
-        $initiatorPassword = $this->config['credentials']['b2c']['initiator_password'] ?? null;
+        $initiatorName = $payload['initiator_name'] ?? $this->config->b2cInitiatorName();
+        $securityCredential = $payload['security_credential'] ?? $this->config->b2cSecurityCredential();
+        $initiatorPassword = $this->config->b2cInitiatorPassword();
 
         if (! $securityCredential && $initiatorPassword) {
             try {
-                $securityCredential = MpesaHelper::generateSecurityCredential($initiatorPassword);
+                $securityCredential = $this->helper->generateSecurityCredential($initiatorPassword);
             } catch (\Throwable $e) {
                 return $this->errorResponse($e->getMessage());
             }
@@ -481,7 +472,7 @@ class MpesaClient
             return $this->errorResponse('Missing initiator_name or security_credential for account balance.');
         }
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/accountbalance/v1/query';
 
         $response = Http::timeout(20)
@@ -511,16 +502,16 @@ class MpesaClient
             return $this->errorResponse('Missing short_code, transaction_id, amount, or remarks.');
         }
 
-        $resultUrl = $payload['result_url'] ?? $this->resolveCallback('reversal_result');
-        $timeoutUrl = $payload['timeout_url'] ?? $this->resolveCallback('reversal_timeout');
+        $resultUrl = $payload['result_url'] ?? $this->config->callbackReversalResult();
+        $timeoutUrl = $payload['timeout_url'] ?? $this->config->callbackReversalTimeout();
 
-        $initiatorName = $payload['initiator_name'] ?? ($this->config['credentials']['b2c']['initiator_name'] ?? null);
-        $securityCredential = $payload['security_credential'] ?? ($this->config['credentials']['b2c']['security_credential'] ?? null);
-        $initiatorPassword = $this->config['credentials']['b2c']['initiator_password'] ?? null;
+        $initiatorName = $payload['initiator_name'] ?? $this->config->b2cInitiatorName();
+        $securityCredential = $payload['security_credential'] ?? $this->config->b2cSecurityCredential();
+        $initiatorPassword = $this->config->b2cInitiatorPassword();
 
         if (! $securityCredential && $initiatorPassword) {
             try {
-                $securityCredential = MpesaHelper::generateSecurityCredential($initiatorPassword);
+                $securityCredential = $this->helper->generateSecurityCredential($initiatorPassword);
             } catch (\Throwable $e) {
                 return $this->errorResponse($e->getMessage());
             }
@@ -544,7 +535,7 @@ class MpesaClient
             return $this->errorResponse('Missing initiator_name or security_credential for reversal.');
         }
 
-        $baseUrl = rtrim($this->config['base_url'] ?? 'https://sandbox.safaricom.co.ke', '/');
+        $baseUrl = rtrim($this->config->baseUrl(), '/');
         $url = $baseUrl . '/mpesa/reversal/v1/request';
 
         $response = Http::timeout(20)
@@ -571,15 +562,6 @@ class MpesaClient
         }
 
         return $digits;
-    }
-
-    /**
-     * Resolve callback URL by config key.
-     */
-    private function resolveCallback(string $key): ?string
-    {
-        $callbacks = $this->config['callbacks'] ?? [];
-        return $callbacks[$key] ?? null;
     }
 
     /**

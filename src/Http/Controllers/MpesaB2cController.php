@@ -9,10 +9,18 @@ use JamesKabz\MpesaPkg\MpesaClient;
 use JamesKabz\MpesaPkg\Http\Concerns\ValidatesWebhook;
 use JamesKabz\MpesaPkg\Models\MpesaCallback;
 use JamesKabz\MpesaPkg\Models\MpesaRequest;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
 class MpesaB2cController
 {
     use ValidatesWebhook;
+
+    protected MpesaConfig $config;
+
+    public function __construct(MpesaConfig $config)
+    {
+        $this->config = $config;
+    }
 
     /**
      * Send a B2C payment and persist request if enabled.
@@ -35,17 +43,16 @@ class MpesaB2cController
             'originator_conversation_id' => $data['originator_conversation_id'] ?? null,
         ]);
 
-        if (config('mpesa.store_requests', true)) {
+        if ($this->config->storeRequests()) {
             try {
-                $b2cConfig = config('mpesa.credentials.b2c', []);
                 MpesaRequest::create([
                     'type' => 'b2c',
                     'status' => $result['ok'] ? 'pending' : 'failed',
                     'phone' => $data['phone'],
                     'amount' => $data['amount'],
                     'remarks' => $data['remarks'] ?? null,
-                    'command_id' => $b2cConfig['command_id'] ?? null,
-                    'party_a' => $b2cConfig['short_code'] ?? null,
+                    'command_id' => $this->config->b2cCommandId(),
+                    'party_a' => $this->config->b2cShortCode(),
                     'party_b' => $data['phone'],
                     'originator_conversation_id' => data_get($result, 'data.OriginatorConversationID'),
                     'conversation_id' => data_get($result, 'data.ConversationID'),
@@ -102,7 +109,7 @@ class MpesaB2cController
         Log::info('M-Pesa B2C result received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'b2c_result',
@@ -136,7 +143,7 @@ class MpesaB2cController
         Log::info('M-Pesa B2C timeout received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'b2c_timeout',

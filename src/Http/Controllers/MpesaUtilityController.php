@@ -8,10 +8,18 @@ use Illuminate\Support\Facades\Log;
 use JamesKabz\MpesaPkg\Http\Concerns\ValidatesWebhook;
 use JamesKabz\MpesaPkg\MpesaClient;
 use JamesKabz\MpesaPkg\Models\MpesaCallback;
+use JamesKabz\MpesaPkg\Services\MpesaConfig;
 
 class MpesaUtilityController
 {
     use ValidatesWebhook;
+
+    protected MpesaConfig $config;
+
+    public function __construct(MpesaConfig $config)
+    {
+        $this->config = $config;
+    }
 
     /**
      * Initiate transaction status query.
@@ -47,7 +55,7 @@ class MpesaUtilityController
         Log::info('M-Pesa transaction status result received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'transaction_status_result',
@@ -81,7 +89,7 @@ class MpesaUtilityController
         Log::info('M-Pesa transaction status timeout received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'transaction_status_timeout',
@@ -135,7 +143,7 @@ class MpesaUtilityController
         Log::info('M-Pesa account balance result received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'account_balance_result',
@@ -169,7 +177,7 @@ class MpesaUtilityController
         Log::info('M-Pesa account balance timeout received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'account_balance_timeout',
@@ -226,7 +234,7 @@ class MpesaUtilityController
         Log::info('M-Pesa reversal result received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'reversal_result',
@@ -260,7 +268,7 @@ class MpesaUtilityController
         Log::info('M-Pesa reversal timeout received', $request->all());
         $payload = $request->all();
 
-        if (config('mpesa.store_callbacks', true)) {
+        if ($this->config->storeCallbacks()) {
             try {
                 MpesaCallback::create([
                     'type' => 'reversal_timeout',
