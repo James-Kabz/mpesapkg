@@ -1,6 +1,5 @@
 {
     "name": "james-kabz/mpesapkg",
-    "version": "0.1.0",
     "description": "Laravel package for integrating Safaricom M-Pesa APIs",
     "type": "library",
     "license": "MIT",
