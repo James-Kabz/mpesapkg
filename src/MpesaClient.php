@@ -150,7 +150,10 @@ class MpesaClient
         ];
 
         $baseUrl = rtrim($this->config->baseUrl(), '/');
-        $url = $baseUrl . '/mpesa/b2c/v3/paymentrequest';
+        $b2cPath = $this->config->env() === 'production'
+            ? '/mpesa/b2c/v1/paymentrequest'
+            : '/mpesa/b2c/v3/paymentrequest';
+        $url = $baseUrl . $b2cPath;
 
         $response = Http::timeout(20)
             ->withToken($accessToken)
